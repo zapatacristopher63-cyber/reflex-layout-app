@@ -72,12 +72,6 @@ if origen_video is not None:
         width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         
-        ret, primer_frame = cap.read()
-        if ret:
-            primer_frame = cv2.cvtColor(primer_frame, cv2.COLOR_BGR2RGB)
-            
-        mapa_calor = np.zeros((height, width), dtype=np.float32)
-        
         # Extraer el primer frame para usarlo como base visual del local
         ret, primer_frame = cap.read()
         if ret:

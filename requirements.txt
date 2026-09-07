@@ -6,3 +6,4 @@ matplotlib
 numpy
 lapx
 yt-dlp
+qrcode[pil]

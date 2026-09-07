@@ -11,6 +11,7 @@ import numpy as np
 import pandas as pd
 import requests
 import streamlit as st
+import streamlit.components.v1 as components
 import yt_dlp
 from ultralytics import YOLO
 
@@ -21,6 +22,11 @@ VIDEO_PRUEBA_URL = "https://drive.google.com/file/d/1NQUjiRgYCCktPAsAS7-HHlEbr5q
 # ──────────────────────────────────────────────────────────────────────────
 ASSETS_DIR = os.path.join(os.path.dirname(__file__), "assets")
 LOGO_PATH = os.path.join(ASSETS_DIR, "logo.png")
+LOGO_UNIVERSIDAD_PATH = os.path.join(ASSETS_DIR, "logo_universidad.png")
+
+# Letras que identifican cada una de las 9 zonas de la cuadrícula, en el
+# mismo orden de recorrido (fila por fila) que usa el motor analítico.
+LETRAS_ZONA = ["A", "B", "C", "D", "E", "F", "G", "H", "I"]
 
 st.set_page_config(
     page_title="Reflex Layout 360",
@@ -36,7 +42,15 @@ def _logo_base64() -> str:
         return base64.b64encode(f.read()).decode()
 
 
+def _logo_universidad_base64() -> str:
+    if not os.path.exists(LOGO_UNIVERSIDAD_PATH):
+        return ""
+    with open(LOGO_UNIVERSIDAD_PATH, "rb") as f:
+        return base64.b64encode(f.read()).decode()
+
+
 LOGO_B64 = _logo_base64()
+LOGO_UNI_B64 = _logo_universidad_base64()
 
 # Paleta extravagante construida a partir de los colores reales del logo
 # (naranja #EF6824 y verde lima #7FB02B), con un dorado de acento para dar
@@ -102,7 +116,7 @@ T = TEMAS[st.session_state.tema]
 CUSTOM_CSS = textwrap.dedent(
     f"""\
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700;900&family=Manrope:wght@400;500;600;700&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700;900&family=Manrope:wght@400;500;600;700&family=Alex+Brush&display=swap');
 
     #MainMenu, footer, header {{visibility: hidden;}}
 
@@ -248,6 +262,37 @@ CUSTOM_CSS = textwrap.dedent(
         background: {GRADIENTE};
         opacity: 0.6;
     }}
+
+    .rl360-footer {{
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 18px;
+        margin-top: 30px;
+        padding: 22px 18px;
+        border-top: 1.5px solid {T['card_borde']};
+        text-align: center;
+        flex-wrap: wrap;
+    }}
+    .rl360-footer img {{
+        height: 58px;
+    }}
+    .rl360-firma {{
+        font-family: 'Alex Brush', cursive;
+        font-size: 1.9rem;
+        line-height: 1.1;
+        background: {GRADIENTE};
+        background-size: 280% 280%;
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+    }}
+    .rl360-firma-caption {{
+        font-size: 0.78rem;
+        color: {T['subtexto']};
+        font-weight: 500;
+        letter-spacing: 0.3px;
+        margin-top: 2px;
+    }}
     </style>
     """
 )
@@ -266,6 +311,46 @@ HEADER_HTML = textwrap.dedent(
 )
 
 st.markdown(CUSTOM_CSS + HEADER_HTML, unsafe_allow_html=True)
+
+
+def reproducir_sonido(tipo: str = "exito") -> None:
+    """Reproduce un sonido corto y suave generado en el navegador (Web Audio
+    API), sin depender de archivos externos, para dar retroalimentación
+    sonora discreta cuando ocurre una acción (subida, descarga, análisis)."""
+    perfiles = {
+        "exito": [523, 659, 784],   # acorde ascendente breve (Do-Mi-Sol)
+        "click": [740],             # tono corto de confirmación
+        "aviso": [392, 330],        # descendente, para advertencias
+    }
+    frecuencias = perfiles.get(tipo, perfiles["exito"])
+    notas_js = ",".join(str(f) for f in frecuencias)
+    components.html(
+        f"""
+        <script>
+        (function() {{
+            try {{
+                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                const ahora = ctx.currentTime;
+                const frecuencias = [{notas_js}];
+                frecuencias.forEach((f, i) => {{
+                    const osc = ctx.createOscillator();
+                    const gain = ctx.createGain();
+                    osc.type = 'sine';
+                    osc.frequency.value = f;
+                    const inicio = ahora + i * 0.09;
+                    gain.gain.setValueAtTime(0.0001, inicio);
+                    gain.gain.exponentialRampToValueAtTime(0.06, inicio + 0.02);
+                    gain.gain.exponentialRampToValueAtTime(0.0001, inicio + 0.28);
+                    osc.connect(gain).connect(ctx.destination);
+                    osc.start(inicio);
+                    osc.stop(inicio + 0.3);
+                }});
+            }} catch (e) {{}}
+        }})();
+        </script>
+        """,
+        height=0,
+    )
 
 st.write(
     "Sube el metraje de tus cámaras de seguridad. Nuestro motor de IA mapeará "
@@ -419,6 +504,7 @@ with tab1:
         tfile = tempfile.NamedTemporaryFile(delete=False, suffix=".mp4")
         tfile.write(archivo_video.read())
         origen_video = tfile.name
+        reproducir_sonido("click")
 
 with tab2:
     st.caption(
@@ -456,7 +542,9 @@ with tab2:
                 proveedor = descargar_medio(url_video, tfile_ext.name, cookies_path)
                 origen_video = tfile_ext.name
                 st.toast(f"Descarga completada desde {proveedor} ✅")
+                reproducir_sonido("exito")
             except Exception:
+                reproducir_sonido("aviso")
                 st.warning(
                     "No se pudo descargar el video de ese enlace. Verifica que "
                     "el archivo/carpeta sea **público** ('cualquiera con el "
@@ -579,6 +667,8 @@ if origen_video is not None:
             .drop(columns=["Intensidad"])
             .reset_index(drop=True)
         )
+
+    reproducir_sonido("exito")
 
     # ──────────────────────────────────────────────────────────────────
     # RENDERIZADO

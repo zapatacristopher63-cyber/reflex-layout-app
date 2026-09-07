@@ -1,6 +1,7 @@
 import os
 import base64
 import tempfile
+import textwrap
 from typing import Optional
 
 import cv2
@@ -38,82 +39,90 @@ def _logo_base64() -> str:
 
 LOGO_B64 = _logo_base64()
 
-st.markdown(
-    f"""
+# NOTA: st.markdown convierte en "bloque de código" cualquier línea con 4+
+# espacios de sangría al inicio. Por eso el CSS/HTML se pasa por
+# textwrap.dedent() y arranca en la columna 0, para que se renderice como
+# HTML real y no como texto plano.
+CUSTOM_CSS = textwrap.dedent(
+    f"""\
     <style>
-        #MainMenu, footer, header {{visibility: hidden;}}
+    #MainMenu, footer, header {{visibility: hidden;}}
 
-        .stApp {{
-            background: radial-gradient(circle at top left, #141a24 0%, {FONDO} 45%);
-        }}
+    .stApp {{
+        background: radial-gradient(circle at top left, #141a24 0%, {FONDO} 45%);
+    }}
 
-        /* Encabezado con logo */
-        .rl360-header {{
-            display: flex;
-            align-items: center;
-            gap: 18px;
-            padding-bottom: 6px;
-        }}
-        .rl360-header img {{
-            height: 62px;
-        }}
-        .rl360-header h1 {{
-            font-size: 2.1rem;
-            margin: 0;
-            background: linear-gradient(90deg, {NARANJA}, {VERDE});
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }}
-        .rl360-subtitle {{
-            color: #b8bfc9;
-            font-size: 1.05rem;
-            margin-top: -4px;
-        }}
+    .rl360-header {{
+        display: flex;
+        align-items: center;
+        gap: 18px;
+        padding-bottom: 6px;
+    }}
+    .rl360-header img {{
+        height: 62px;
+    }}
+    .rl360-header h1 {{
+        font-size: 2.1rem;
+        margin: 0;
+        background: linear-gradient(90deg, {NARANJA}, {VERDE});
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+    }}
+    .rl360-subtitle {{
+        color: #b8bfc9;
+        font-size: 1.05rem;
+        margin-top: -4px;
+    }}
 
-        /* Tarjetas */
-        .rl360-card {{
-            background: {TARJETA};
-            border: 1px solid #262c36;
-            border-radius: 14px;
-            padding: 18px 20px;
-            margin-bottom: 14px;
-        }}
+    .rl360-card {{
+        background: {TARJETA};
+        border: 1px solid #262c36;
+        border-radius: 14px;
+        padding: 18px 20px;
+        margin-bottom: 14px;
+    }}
 
-        div[data-testid="stMetric"] {{
-            background: {TARJETA};
-            border: 1px solid #262c36;
-            border-radius: 12px;
-            padding: 10px 14px;
-        }}
+    div[data-testid="stMetric"] {{
+        background: {TARJETA};
+        border: 1px solid #262c36;
+        border-radius: 12px;
+        padding: 10px 14px;
+    }}
 
-        .stTabs [data-baseweb="tab"] {{
-            font-weight: 600;
-        }}
+    .stTabs [data-baseweb="tab"] {{
+        font-weight: 600;
+    }}
 
-        .stButton>button, .stDownloadButton>button {{
-            background: linear-gradient(90deg, {NARANJA}, {VERDE});
-            color: white;
-            border: none;
-            border-radius: 8px;
-            font-weight: 600;
-        }}
+    .stButton>button, .stDownloadButton>button {{
+        background: linear-gradient(90deg, {NARANJA}, {VERDE});
+        color: white;
+        border: none;
+        border-radius: 8px;
+        font-weight: 600;
+    }}
 
-        [data-testid="stSidebar"] {{
-            background: #10141c;
-            border-right: 1px solid #262c36;
-        }}
+    [data-testid="stSidebar"] {{
+        background: #10141c;
+        border-right: 1px solid #262c36;
+    }}
     </style>
-
-    <div class="rl360-header">
-        {f'<img src="data:image/png;base64,{LOGO_B64}">' if LOGO_B64 else ''}
-        <div>
-            <h1>Reflex Layout 360</h1>
-            <div class="rl360-subtitle">Inteligencia Espacial y Gemelos Digitales para Retail</div>
-        </div>
-    </div>
-    """,
-    unsafe_allow_html=True,
+    """
 )
+
+_logo_img_tag = f'<img src="data:image/png;base64,{LOGO_B64}">' if LOGO_B64 else ""
+HEADER_HTML = textwrap.dedent(
+    f"""\
+    <div class="rl360-header">
+    {_logo_img_tag}
+    <div>
+    <h1>Reflex Layout 360</h1>
+    <div class="rl360-subtitle">Inteligencia Espacial y Gemelos Digitales para Retail</div>
+    </div>
+    </div>
+    """
+)
+
+st.markdown(CUSTOM_CSS + HEADER_HTML, unsafe_allow_html=True)
 
 st.write(
     "Sube el metraje de tus cámaras de seguridad. Nuestro motor de IA mapeará "
@@ -243,15 +252,28 @@ if origen_video is not None:
 
     col1, col2 = st.columns([1.4, 1])
 
+    cap = cv2.VideoCapture(origen_video)
+    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    ret, primer_frame = cap.read() if cap.isOpened() else (False, None)
+
+    # El archivo puede llegar corrupto o incompleto (p. ej. una descarga de
+    # YouTube truncada por el bloqueo anti-bot). En ese caso cv2 no logra
+    # abrir el video y devuelve dimensiones inválidas (0 o -1), lo que antes
+    # rompía np.zeros(). Ahora lo detectamos y avisamos con un mensaje claro.
+    if not cap.isOpened() or not ret or width <= 0 or height <= 0:
+        cap.release()
+        st.error(
+            "⚠️ No se pudo leer el video correctamente: el archivo llegó "
+            "corrupto o incompleto (frecuente cuando la descarga del enlace "
+            "fue bloqueada o interrumpida a mitad de camino). "
+            "Vuelve a intentar la descarga (revisa el cookies.txt) o sube "
+            "el archivo .mp4 directamente en la pestaña 'Subir Archivo Local'."
+        )
+        st.stop()
+
     with st.spinner("Procesando Gemelo Digital y extrayendo analítica espacial..."):
-        cap = cv2.VideoCapture(origen_video)
-        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-
-        ret, primer_frame = cap.read()
-        if ret:
-            primer_frame = cv2.cvtColor(primer_frame, cv2.COLOR_BGR2RGB)
-
+        primer_frame = cv2.cvtColor(primer_frame, cv2.COLOR_BGR2RGB)
         mapa_calor = np.zeros((height, width), dtype=np.float32)
 
         barra_progreso = st.progress(0)

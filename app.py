@@ -53,7 +53,12 @@ with tab2:
     if url_video:
         with st.spinner("Extrayendo flujo de video del enlace..."):
             try:
-                ydl_opts = {'format': 'best[ext=mp4]/best', 'quiet': True, 'noplaylist': True}
+                # Configuramos yt-dlp para buscar el mejor video en mp4, o el mejor disponible sin importar el formato
+                ydl_opts = {
+                    'format': 'bestvideo[ext=mp4]/best[ext=mp4]/best', 
+                    'quiet': True, 
+                    'noplaylist': True
+                }
                 with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                     info = ydl.extract_info(url_video, download=False)
                     origen_video = info['url'] # Obtenemos el link directo al stream

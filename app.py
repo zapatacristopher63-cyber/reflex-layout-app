@@ -51,17 +51,21 @@ with tab1:
 with tab2:
     url_video = st.text_input("Pega el enlace del video (Ej. YouTube):")
     if url_video:
-        with st.spinner("Extrayendo flujo de video del enlace..."):
+        with st.spinner("Descargando temporalmente el video para análisis seguro..."):
             try:
-                # Configuramos yt-dlp para buscar el mejor video en mp4, o el mejor disponible sin importar el formato
+                tfile_yt = tempfile.NamedTemporaryFile(delete=False, suffix='.mp4')
+                
+                # Configuramos yt-dlp para descargar el video directamente al archivo temporal
                 ydl_opts = {
-                    'format': 'bestvideo[ext=mp4]/best[ext=mp4]/best', 
-                    'quiet': True, 
+                    'format': 'best[ext=mp4][height<=720]/best', # Limitamos a 720p para mayor velocidad
+                    'outtmpl': tfile_yt.name,
+                    'quiet': True,
                     'noplaylist': True
                 }
                 with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                    info = ydl.extract_info(url_video, download=False)
-                    origen_video = info['url'] # Obtenemos el link directo al stream
+                    ydl.download([url_video])
+                    
+                origen_video = tfile_yt.name # OpenCV ahora leerá un archivo local garantizado
             except Exception as e:
                 st.error(f"Error técnico al extraer el video: {str(e)}")
 

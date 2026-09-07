@@ -86,11 +86,66 @@ if archivo_video is not None:
                 
         cap.release()
         
-        # --- CAPA DE PROCESAMIENTO (Alpha Blending) ---
+      # --- CAPA DE PROCESAMIENTO (Alpha Blending) ---
         mapa_suavizado = cv2.GaussianBlur(mapa_calor, (0, 0), sigmaX=21, sigmaY=21)
         mapa_norm = cv2.normalize(mapa_suavizado, None, 0, 255, cv2.NORM_MINMAX, dtype=cv2.CV_8U)
         mapa_color = cv2.applyColorMap(mapa_norm, cv2.COLORMAP_JET)
         mapa_color = cv2.cvtColor(mapa_color, cv2.COLOR_BGR2RGB)
+        
+        # 1. Crear la mezcla translúcida completa
+        mezcla = cv2.addWeighted(primer_frame, 1.0 - opacidad, mapa_color, opacidad, 0)
+        
+        # 2. Crear una máscara de 3 canales explícita (Evita el error de PyArrow/Streamlit)
+        mascara_1d = mapa_norm > 5
+        mascara_3d = np.repeat(mascara_1d[:, :, np.newaxis], 3, axis=2)
+        
+        # 3. Combinar y forzar el formato de memoria correcto (uint8)
+        frame_final = np.where(mascara_3d, mezcla, primer_frame).astype(np.uint8)
+
+        # --- MOTOR ANALÍTICO (Cuadrícula Espacial) ---
+        zonas_x, zonas_y = width // 3, height // 3
+        analisis_cuadricula = []
+        nombres_zonas = ["Noroeste", "Norte", "Noreste", "Oeste", "Centro", "Este", "Suroeste", "Sur", "Sureste"]
+        
+        idx = 0
+        for i in range(3):
+            for j in range(3):
+                y_inicio, y_fin = i * zonas_y, (i + 1) * zonas_y
+                x_inicio, x_fin = j * zonas_x, (j + 1) * zonas_x
+                intensidad = np.sum(mapa_calor[y_inicio:y_fin, x_inicio:x_fin])
+                analisis_cuadricula.append({'Sector': nombres_zonas[idx], 'Intensidad': intensidad})
+                idx += 1
+                
+        df_zonas = pd.DataFrame(analisis_cuadricula)
+        max_int = df_zonas['Intensidad'].max()
+        
+        def clasificar_zona(intensidad):
+            if max_int == 0 or intensidad == 0: return "Sin Datos"
+            ratio = intensidad / max_int
+            if ratio > 0.65: return "🔥 Caliente (Alta Permanencia)"
+            elif ratio > 0.25: return "🚶 Transición (Flujo Medio)"
+            else: return "🧊 Fría (Bajo Tráfico)"
+
+        def accion_estrategica(clasificacion):
+            if "Caliente" in clasificacion: return "⚠️ Ubicar productos de alto margen (Impulso)"
+            elif "Fría" in clasificacion: return "💡 Trasladar productos destino para forzar tráfico"
+            else: return "✅ Zona estable - Mantener layout actual"
+
+        df_zonas['Estado del Flujo'] = df_zonas['Intensidad'].apply(clasificar_zona)
+        df_zonas['Directriz de Layout (RA)'] = df_zonas['Estado del Flujo'].apply(accion_estrategica)
+        
+        df_final = df_zonas[df_zonas['Estado del Flujo'] != "Sin Datos"].sort_values(by='Intensidad', ascending=False).drop(columns=['Intensidad']).reset_index(drop=True)
+
+        # 5. RENDERIZADO DE LA INTERFAZ
+        with col1:
+            st.markdown("#### 🔥 Simulación Híbrida: Termógrafo sobre Gemelo Digital")
+            # Cambiamos use_column_width a use_container_width (el estándar actual)
+            st.image(frame_final, use_container_width=True, caption="El mapa de calor respeta la visibilidad del mobiliario real gracias al Alpha Blending.")
+            
+        with col2:
+            st.markdown("#### 📊 Decisiones Automatizadas de Merchandising")
+            st.dataframe(df_final, use_container_width=True)
+            st.caption("Nota: Las directrices señaladas con ⚠️ y 💡 se proyectarán mediante Realidad Aumentada directamente en los estantes físicos del establecimiento.")
         
         # Máscara: Solo aplicar color donde hay tráfico real
         mascara = (mapa_norm > 5).astype(np.uint8)[:, :, np.newaxis]

@@ -5,5 +5,4 @@ pandas
 numpy
 lapx
 yt-dlp
-qrcode[pil]
 requests

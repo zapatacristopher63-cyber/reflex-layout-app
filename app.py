@@ -38,33 +38,41 @@ def _logo_base64() -> str:
 
 LOGO_B64 = _logo_base64()
 
-# Paleta "exótica": fucsia, violeta, turquesa y amarillo solar en degradado.
-ACCENT_1 = "#FF3E9D"   # fucsia
-ACCENT_2 = "#7B5CFF"   # violeta
-ACCENT_3 = "#20D3C9"   # turquesa
-ACCENT_4 = "#FFD23F"   # amarillo solar
-GRADIENTE = f"linear-gradient(100deg, {ACCENT_1}, {ACCENT_2} 45%, {ACCENT_3} 75%, {ACCENT_4})"
+# Paleta extravagante construida a partir de los colores reales del logo
+# (naranja #EF6824 y verde lima #7FB02B), con un dorado de acento para dar
+# un toque llamativo y de alto contraste.
+NARANJA = "#FF6B1A"
+NARANJA_2 = "#FF9142"
+VERDE_LIMA = "#8FCB2E"
+VERDE_OSCURO = "#5C8A1E"
+DORADO = "#FFC93C"
+GRADIENTE = f"linear-gradient(115deg, {NARANJA} 0%, {DORADO} 45%, {VERDE_LIMA} 100%)"
+GRADIENTE_SUAVE = f"linear-gradient(115deg, {NARANJA_2}22, {DORADO}22, {VERDE_LIMA}22)"
 
 TEMAS = {
     "🌙 Oscuro": {
-        "bg_a": "#1a0e2e",
-        "bg_b": "#0a0414",
-        "texto": "#f4eefe",
-        "subtexto": "#c9b9ee",
+        "bg_a": "#1c1206",
+        "bg_b": "#0c0904",
+        "blob_1": f"{NARANJA}33",
+        "blob_2": f"{VERDE_LIMA}2b",
+        "texto": "#fbf3e7",
+        "subtexto": "#e8c9a0",
         "card": "rgba(255,255,255,0.06)",
-        "card_borde": "rgba(255,255,255,0.14)",
-        "sidebar": "#150a26",
-        "input_bg": "rgba(255,255,255,0.07)",
+        "card_borde": "rgba(255,177,72,0.28)",
+        "sidebar": "#170f07",
+        "input_bg": "rgba(255,255,255,0.08)",
     },
     "☀️ Claro": {
-        "bg_a": "#fff3fa",
-        "bg_b": "#eaf7ff",
-        "texto": "#2a1145",
-        "subtexto": "#6c4fa8",
-        "card": "rgba(255,255,255,0.75)",
-        "card_borde": "rgba(123,92,255,0.18)",
-        "sidebar": "#fdf1ff",
-        "input_bg": "rgba(123,92,255,0.06)",
+        "bg_a": "#fff8ec",
+        "bg_b": "#f2f9e3",
+        "blob_1": f"{NARANJA}22",
+        "blob_2": f"{VERDE_LIMA}25",
+        "texto": "#2e2410",
+        "subtexto": "#7a5a24",
+        "card": "rgba(255,255,255,0.8)",
+        "card_borde": "rgba(143,203,46,0.3)",
+        "sidebar": "#fffaf0",
+        "input_bg": "rgba(143,203,46,0.08)",
     },
 }
 
@@ -94,38 +102,46 @@ T = TEMAS[st.session_state.tema]
 CUSTOM_CSS = textwrap.dedent(
     f"""\
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;800&family=Poppins:wght@400;500;600&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700;900&family=Manrope:wght@400;500;600;700&display=swap');
 
     #MainMenu, footer, header {{visibility: hidden;}}
 
     html, body, [class*="css"] {{
-        font-family: 'Poppins', sans-serif;
+        font-family: 'Manrope', sans-serif;
     }}
 
     .stApp {{
-        background: radial-gradient(circle at 15% 10%, {T['bg_a']} 0%, {T['bg_b']} 55%);
+        background:
+            radial-gradient(circle at 8% 8%, {T['blob_1']} 0%, transparent 40%),
+            radial-gradient(circle at 92% 18%, {T['blob_2']} 0%, transparent 38%),
+            radial-gradient(circle at 20% 95%, {T['blob_2']} 0%, transparent 35%),
+            linear-gradient(160deg, {T['bg_a']} 0%, {T['bg_b']} 100%);
         color: {T['texto']};
     }}
 
     .rl360-header {{
         display: flex;
         align-items: center;
-        gap: 20px;
-        padding-bottom: 4px;
+        gap: 22px;
+        padding: 4px 0 10px 0;
+        position: relative;
     }}
     .rl360-header img {{
-        height: 64px;
-        filter: drop-shadow(0 0 14px rgba(255,62,157,0.35));
+        height: 70px;
+        filter: drop-shadow(0 0 18px {NARANJA}55);
     }}
     .rl360-header h1 {{
-        font-family: 'Baloo 2', sans-serif;
-        font-size: 2.4rem;
+        font-family: 'Unbounded', sans-serif;
+        font-weight: 900;
+        font-size: 2.5rem;
+        letter-spacing: -0.5px;
         margin: 0;
         background: {GRADIENTE};
-        background-size: 300% 300%;
+        background-size: 280% 280%;
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
-        animation: rl360-glow 6s ease infinite;
+        animation: rl360-glow 7s ease infinite;
+        text-transform: uppercase;
     }}
     @keyframes rl360-glow {{
         0% {{background-position: 0% 50%;}}
@@ -134,80 +150,103 @@ CUSTOM_CSS = textwrap.dedent(
     }}
     .rl360-subtitle {{
         color: {T['subtexto']};
-        font-size: 1.08rem;
-        font-weight: 500;
-        margin-top: -2px;
+        font-size: 1.05rem;
+        font-weight: 600;
+        margin-top: 2px;
+        letter-spacing: 0.2px;
+    }}
+
+    h2, h3, h4 {{
+        font-family: 'Unbounded', sans-serif;
+        font-weight: 700;
     }}
 
     .rl360-card {{
         background: {T['card']};
-        border: 1px solid {T['card_borde']};
-        border-radius: 18px;
-        padding: 18px 20px;
+        border: 1.5px solid {T['card_borde']};
+        border-radius: 20px;
+        padding: 18px 22px;
         margin-bottom: 14px;
-        backdrop-filter: blur(6px);
+        backdrop-filter: blur(8px);
+        box-shadow: 0 8px 28px rgba(0,0,0,0.18);
     }}
 
     div[data-testid="stMetric"] {{
         background: {T['card']};
-        border: 1px solid {T['card_borde']};
-        border-radius: 14px;
+        border: 1.5px solid {T['card_borde']};
+        border-radius: 16px;
         padding: 10px 14px;
     }}
 
     .stTabs [data-baseweb="tab-list"] {{
-        gap: 6px;
+        gap: 8px;
     }}
     .stTabs [data-baseweb="tab"] {{
+        font-family: 'Unbounded', sans-serif;
         font-weight: 600;
-        border-radius: 12px 12px 0 0;
+        font-size: 0.85rem;
+        border-radius: 14px 14px 0 0;
     }}
     .stTabs [aria-selected="true"] {{
-        background: {T['card']};
+        background: {GRADIENTE_SUAVE};
         border-bottom: 3px solid transparent;
         border-image: {GRADIENTE};
         border-image-slice: 1;
     }}
 
     .stButton>button, .stDownloadButton>button {{
+        font-family: 'Unbounded', sans-serif;
         background: {GRADIENTE};
         background-size: 250% 250%;
-        color: white;
+        color: #1c1206;
         border: none;
         border-radius: 999px;
-        font-weight: 600;
-        padding: 0.5rem 1.4rem;
+        font-weight: 700;
+        font-size: 0.85rem;
+        padding: 0.55rem 1.5rem;
+        box-shadow: 0 6px 18px {NARANJA}44;
         transition: 0.25s ease;
     }}
     .stButton>button:hover, .stDownloadButton>button:hover {{
         background-position: 100% 0%;
-        transform: translateY(-1px) scale(1.02);
+        transform: translateY(-2px) scale(1.02);
+        box-shadow: 0 10px 24px {NARANJA}66;
     }}
 
     div[data-testid="stTextInput"] input, div[data-testid="stFileUploaderDropzone"] {{
         background: {T['input_bg']} !important;
-        border-radius: 12px !important;
+        border-radius: 14px !important;
+        border: 1.5px solid {T['card_borde']} !important;
     }}
 
     [data-testid="stSidebar"] {{
         background: {T['sidebar']};
-        border-right: 1px solid {T['card_borde']};
+        border-right: 1.5px solid {T['card_borde']};
     }}
 
     div[data-testid="stExpander"] {{
         background: {T['card']};
-        border-radius: 14px;
-        border: 1px solid {T['card_borde']};
+        border-radius: 16px;
+        border: 1.5px solid {T['card_borde']};
     }}
 
     .rl360-badge {{
         display: inline-block;
-        padding: 3px 12px;
+        padding: 4px 14px;
         border-radius: 999px;
         background: {GRADIENTE};
-        color: white;
-        font-size: 0.8rem;
-        font-weight: 600;
+        color: #1c1206;
+        font-family: 'Unbounded', sans-serif;
+        font-size: 0.75rem;
+        font-weight: 700;
+    }}
+
+    hr {{
+        border: none;
+        height: 3px;
+        border-radius: 3px;
+        background: {GRADIENTE};
+        opacity: 0.6;
     }}
     </style>
     """
@@ -219,8 +258,8 @@ HEADER_HTML = textwrap.dedent(
     <div class="rl360-header">
     {_logo_img_tag}
     <div>
-    <h1>✨ Reflex Layout 360</h1>
-    <div class="rl360-subtitle">Inteligencia Espacial y Gemelos Digitales para Retail</div>
+    <h1>Reflex Layout 360</h1>
+    <div class="rl360-subtitle">🛒 Inteligencia Espacial y Gemelos Digitales para Retail</div>
     </div>
     </div>
     """

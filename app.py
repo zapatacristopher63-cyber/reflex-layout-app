@@ -9,22 +9,18 @@ from urllib.parse import urlparse
 import cv2
 import numpy as np
 import pandas as pd
-import qrcode
 import requests
 import streamlit as st
 import yt_dlp
 from ultralytics import YOLO
+
+VIDEO_PRUEBA_URL = "https://drive.google.com/file/d/1qiK0plB-cUAJBcdLZd61bBHzvmySdlKK/view?usp=drivesdk"
 
 # ──────────────────────────────────────────────────────────────────────────
 # CONFIGURACIÓN GENERAL Y BRANDING
 # ──────────────────────────────────────────────────────────────────────────
 ASSETS_DIR = os.path.join(os.path.dirname(__file__), "assets")
 LOGO_PATH = os.path.join(ASSETS_DIR, "logo.png")
-
-NARANJA = "#F7941D"
-VERDE = "#8DC63F"
-FONDO = "#0E1117"
-TARJETA = "#161B22"
 
 st.set_page_config(
     page_title="Reflex Layout 360",
@@ -42,6 +38,55 @@ def _logo_base64() -> str:
 
 LOGO_B64 = _logo_base64()
 
+# Paleta "exótica": fucsia, violeta, turquesa y amarillo solar en degradado.
+ACCENT_1 = "#FF3E9D"   # fucsia
+ACCENT_2 = "#7B5CFF"   # violeta
+ACCENT_3 = "#20D3C9"   # turquesa
+ACCENT_4 = "#FFD23F"   # amarillo solar
+GRADIENTE = f"linear-gradient(100deg, {ACCENT_1}, {ACCENT_2} 45%, {ACCENT_3} 75%, {ACCENT_4})"
+
+TEMAS = {
+    "🌙 Oscuro": {
+        "bg_a": "#1a0e2e",
+        "bg_b": "#0a0414",
+        "texto": "#f4eefe",
+        "subtexto": "#c9b9ee",
+        "card": "rgba(255,255,255,0.06)",
+        "card_borde": "rgba(255,255,255,0.14)",
+        "sidebar": "#150a26",
+        "input_bg": "rgba(255,255,255,0.07)",
+    },
+    "☀️ Claro": {
+        "bg_a": "#fff3fa",
+        "bg_b": "#eaf7ff",
+        "texto": "#2a1145",
+        "subtexto": "#6c4fa8",
+        "card": "rgba(255,255,255,0.75)",
+        "card_borde": "rgba(123,92,255,0.18)",
+        "sidebar": "#fdf1ff",
+        "input_bg": "rgba(123,92,255,0.06)",
+    },
+}
+
+if "tema" not in st.session_state:
+    st.session_state.tema = "🌙 Oscuro"
+
+# ──────────────────────────────────────────────────────────────────────────
+# PANEL LATERAL
+# ──────────────────────────────────────────────────────────────────────────
+if LOGO_B64:
+    st.sidebar.image(LOGO_PATH, use_container_width=True)
+
+st.sidebar.selectbox("🎨 Apariencia", list(TEMAS.keys()), key="tema")
+
+st.sidebar.header("⚙️ Motor de Procesamiento")
+salto_frames = st.sidebar.slider(
+    "Salto de frames", 1, 5, 2, help="Acelera el análisis saltando frames del video."
+)
+opacidad = st.sidebar.slider("Opacidad del Termógrafo", 0.1, 1.0, 0.55)
+
+T = TEMAS[st.session_state.tema]
+
 # NOTA: st.markdown convierte en "bloque de código" cualquier línea con 4+
 # espacios de sangría al inicio. Por eso el CSS/HTML se pasa por
 # textwrap.dedent() y arranca en la columna 0, para que se renderice como
@@ -49,64 +94,120 @@ LOGO_B64 = _logo_base64()
 CUSTOM_CSS = textwrap.dedent(
     f"""\
     <style>
+    @import url('https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;800&family=Poppins:wght@400;500;600&display=swap');
+
     #MainMenu, footer, header {{visibility: hidden;}}
 
+    html, body, [class*="css"] {{
+        font-family: 'Poppins', sans-serif;
+    }}
+
     .stApp {{
-        background: radial-gradient(circle at top left, #141a24 0%, {FONDO} 45%);
+        background: radial-gradient(circle at 15% 10%, {T['bg_a']} 0%, {T['bg_b']} 55%);
+        color: {T['texto']};
     }}
 
     .rl360-header {{
         display: flex;
         align-items: center;
-        gap: 18px;
-        padding-bottom: 6px;
+        gap: 20px;
+        padding-bottom: 4px;
     }}
     .rl360-header img {{
-        height: 62px;
+        height: 64px;
+        filter: drop-shadow(0 0 14px rgba(255,62,157,0.35));
     }}
     .rl360-header h1 {{
-        font-size: 2.1rem;
+        font-family: 'Baloo 2', sans-serif;
+        font-size: 2.4rem;
         margin: 0;
-        background: linear-gradient(90deg, {NARANJA}, {VERDE});
+        background: {GRADIENTE};
+        background-size: 300% 300%;
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
+        animation: rl360-glow 6s ease infinite;
+    }}
+    @keyframes rl360-glow {{
+        0% {{background-position: 0% 50%;}}
+        50% {{background-position: 100% 50%;}}
+        100% {{background-position: 0% 50%;}}
     }}
     .rl360-subtitle {{
-        color: #b8bfc9;
-        font-size: 1.05rem;
-        margin-top: -4px;
+        color: {T['subtexto']};
+        font-size: 1.08rem;
+        font-weight: 500;
+        margin-top: -2px;
     }}
 
     .rl360-card {{
-        background: {TARJETA};
-        border: 1px solid #262c36;
-        border-radius: 14px;
+        background: {T['card']};
+        border: 1px solid {T['card_borde']};
+        border-radius: 18px;
         padding: 18px 20px;
         margin-bottom: 14px;
+        backdrop-filter: blur(6px);
     }}
 
     div[data-testid="stMetric"] {{
-        background: {TARJETA};
-        border: 1px solid #262c36;
-        border-radius: 12px;
+        background: {T['card']};
+        border: 1px solid {T['card_borde']};
+        border-radius: 14px;
         padding: 10px 14px;
     }}
 
+    .stTabs [data-baseweb="tab-list"] {{
+        gap: 6px;
+    }}
     .stTabs [data-baseweb="tab"] {{
         font-weight: 600;
+        border-radius: 12px 12px 0 0;
+    }}
+    .stTabs [aria-selected="true"] {{
+        background: {T['card']};
+        border-bottom: 3px solid transparent;
+        border-image: {GRADIENTE};
+        border-image-slice: 1;
     }}
 
     .stButton>button, .stDownloadButton>button {{
-        background: linear-gradient(90deg, {NARANJA}, {VERDE});
+        background: {GRADIENTE};
+        background-size: 250% 250%;
         color: white;
         border: none;
-        border-radius: 8px;
+        border-radius: 999px;
         font-weight: 600;
+        padding: 0.5rem 1.4rem;
+        transition: 0.25s ease;
+    }}
+    .stButton>button:hover, .stDownloadButton>button:hover {{
+        background-position: 100% 0%;
+        transform: translateY(-1px) scale(1.02);
+    }}
+
+    div[data-testid="stTextInput"] input, div[data-testid="stFileUploaderDropzone"] {{
+        background: {T['input_bg']} !important;
+        border-radius: 12px !important;
     }}
 
     [data-testid="stSidebar"] {{
-        background: #10141c;
-        border-right: 1px solid #262c36;
+        background: {T['sidebar']};
+        border-right: 1px solid {T['card_borde']};
+    }}
+
+    div[data-testid="stExpander"] {{
+        background: {T['card']};
+        border-radius: 14px;
+        border: 1px solid {T['card_borde']};
+    }}
+
+    .rl360-badge {{
+        display: inline-block;
+        padding: 3px 12px;
+        border-radius: 999px;
+        background: {GRADIENTE};
+        color: white;
+        font-size: 0.8rem;
+        font-weight: 600;
     }}
     </style>
     """
@@ -118,7 +219,7 @@ HEADER_HTML = textwrap.dedent(
     <div class="rl360-header">
     {_logo_img_tag}
     <div>
-    <h1>Reflex Layout 360</h1>
+    <h1>✨ Reflex Layout 360</h1>
     <div class="rl360-subtitle">Inteligencia Espacial y Gemelos Digitales para Retail</div>
     </div>
     </div>
@@ -129,7 +230,7 @@ st.markdown(CUSTOM_CSS + HEADER_HTML, unsafe_allow_html=True)
 
 st.write(
     "Sube el metraje de tus cámaras de seguridad. Nuestro motor de IA mapeará "
-    "el flujo peatonal y generará decisiones estratégicas de layout al instante."
+    "el flujo peatonal y generará decisiones estratégicas de layout al instante 🛍️🔥"
 )
 st.divider()
 
@@ -144,21 +245,6 @@ def cargar_modelo():
 
 model = cargar_modelo()
 
-# ──────────────────────────────────────────────────────────────────────────
-# PANEL LATERAL
-# ──────────────────────────────────────────────────────────────────────────
-if LOGO_B64:
-    st.sidebar.image(LOGO_PATH, use_container_width=True)
-
-st.sidebar.header("⚙️ Motor de Procesamiento")
-salto_frames = st.sidebar.slider(
-    "Salto de frames", 1, 5, 2, help="Acelera el análisis saltando frames del video."
-)
-opacidad = st.sidebar.slider("Opacidad del Termógrafo", 0.1, 1.0, 0.55)
-
-# ──────────────────────────────────────────────────────────────────────────
-# DESCARGA DE VIDEO DESDE ENLACE (YouTube y similares)
-# ──────────────────────────────────────────────────────────────────────────
 # ──────────────────────────────────────────────────────────────────────────
 # DESCARGA DE VIDEO DESDE ENLACE
 # ──────────────────────────────────────────────────────────────────────────
@@ -301,6 +387,9 @@ with tab2:
         "sin bloqueos) y YouTube / otras plataformas de video (con posibles "
         "restricciones anti-bot). En Drive/Dropbox/OneDrive asegúrate de que "
         "el enlace tenga permiso público o 'cualquiera con el enlace'."
+    )
+    st.caption(
+        f"🎬 ¿Quieres probar la app sin subir nada? Usa este video de prueba: {VIDEO_PRUEBA_URL}"
     )
     url_video = st.text_input(
         "Pega el enlace del video:",
@@ -467,37 +556,6 @@ if origen_video is not None:
         st.markdown("#### 📊 Decisiones Automatizadas de Merchandising")
         st.dataframe(df_final, use_container_width=True, hide_index=True)
         st.caption(
-            "Nota: Las directrices señaladas con ⚠️ y 💡 se proyectarán mediante "
-            "Realidad Aumentada directamente en los estantes físicos del establecimiento."
-        )
-
-    # --- PUENTE DE REALIDAD AUMENTADA (RA) ---
-    st.divider()
-    st.markdown("### 📱 Despliegue en Espacio Físico (AR)")
-    st.write(
-        "Escanea el código QR con un dispositivo móvil para proyectar las "
-        "directrices de merchandising sobre el entorno físico mediante Realidad Aumentada."
-    )
-
-    col_qr, col_info = st.columns([1, 4])
-
-    with col_qr:
-        qr = qrcode.QRCode(version=1, box_size=10, border=1)
-        qr.add_data("https://ejemplo-webar-layout.com/demo")
-        qr.make(fit=True)
-        img_qr = qr.make_image(fill_color="white", back_color=FONDO)
-        st.image(img_qr.get_image(), use_container_width=True)
-
-    with col_info:
-        st.markdown(
-            f"""
-            <div class="rl360-card">
-            <b>Protocolo de Ejecución en Piso:</b><br>
-            1. Escanee el código desde su dispositivo móvil.<br>
-            2. Enfoque la cámara hacia los estantes de las <i>Zonas Calientes</i>.<br>
-            3. Siga la interfaz holográfica para reubicar los productos de alto margen.<br>
-            4. Valide la nueva distribución en el sistema.
-            </div>
-            """,
-            unsafe_allow_html=True,
+            "Nota: Las directrices señaladas con ⚠️ y 💡 indican dónde reforzar o "
+            "reubicar productos según el flujo peatonal detectado."
         )

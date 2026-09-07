@@ -5,6 +5,8 @@ import pandas as pd
 import tempfile
 from ultralytics import YOLO
 import yt_dlp
+import qrcode
+from PIL import Image
 
 # 1. DISEÑO MINIMALISTA DE LA PÁGINA
 st.set_page_config(page_title="Reflex Layout 360", page_icon="⬛", layout="wide")
@@ -174,3 +176,27 @@ if origen_video is not None:
             st.markdown("#### 📊 Decisiones Automatizadas de Merchandising")
             st.dataframe(df_final, use_container_width=True)
             st.caption("Nota: Las directrices señaladas con ⚠️ y 💡 se proyectarán mediante Realidad Aumentada directamente en los estantes físicos del establecimiento.")
+
+        # --- PUENTE DE REALIDAD AUMENTADA (RA) ---
+        st.divider()
+        st.markdown("### 📱 Despliegue en Espacio Físico (AR)")
+        st.write("Escanea el código QR con un dispositivo móvil para proyectar las directrices de merchandising sobre el entorno físico mediante Realidad Aumentada.")
+        
+        col_qr, col_info = st.columns([1, 4])
+        
+        with col_qr:
+            # Simulamos la URL que aloja el entorno WebAR (ej. AR.js o modelo 3D)
+            url_ar = "https://ejemplo-webar-layout.com/demo"
+            qr = qrcode.QRCode(version=1, box_size=10, border=1)
+            qr.add_data(url_ar)
+            qr.make(fit=True)
+            img_qr = qr.make_image(fill_color="white", back_color="#0e1117")
+            
+            st.image(img_qr.get_image(), use_container_width=True)
+            
+        with col_info:
+            st.success("**Protocolo de Ejecución en Piso:**\n"
+                    "1. Escanee el código desde su dispositivo móvil.\n"
+                    "2. Enfoque la cámara hacia los estantes de las *Zonas Calientes*.\n"
+                    "3. Siga la interfaz holográfica para reubicar los productos de alto margen.\n"
+                    "4. Valide la nueva distribución en el sistema.")

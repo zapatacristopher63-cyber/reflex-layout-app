@@ -1,15 +1,13 @@
 import streamlit as st
 import cv2
 import numpy as np
-import matplotlib.pyplot as plt
-from ultralytics import YOLO
 import pandas as pd
 import tempfile
+from ultralytics import YOLO
 
 # 1. DISEÑO MINIMALISTA DE LA PÁGINA
 st.set_page_config(page_title="Reflex Layout 360", page_icon="⬛", layout="wide")
 
-# Ocultar el menú por defecto de Streamlit para un look más "App Propia"
 hide_st_style = """
             <style>
             #MainMenu {visibility: hidden;}
@@ -19,85 +17,126 @@ hide_st_style = """
             """
 st.markdown(hide_st_style, unsafe_allow_html=True)
 
-# 2. ENCABEZADO PROFESIONAL
+# Cachear el modelo para no saturar la RAM del servidor
+@st.cache_resource
+def cargar_modelo():
+    return YOLO('yolov8n.pt')
+
+model = cargar_modelo()
+
+# 2. PANEL LATERAL DE CONFIGURACIÓN
+st.sidebar.header("⚙️ Motor de Procesamiento")
+salto_frames = st.sidebar.slider("Salto de frames", 1, 5, 2, help="Acelera el análisis saltando frames del video.")
+opacidad = st.sidebar.slider("Opacidad del Termógrafo", 0.1, 1.0, 0.55)
+
+# 3. ENCABEZADO PROFESIONAL
 st.title("⬛ Reflex Layout 360")
 st.markdown("### Inteligencia Espacial y Gemelos Digitales para Retail")
 st.write("Sube el metraje de tus cámaras de seguridad. Nuestro motor de IA mapeará el flujo peatonal y generará decisiones estratégicas de layout al instante.")
 st.divider()
 
-# 3. ZONA DE CARGA DE ARCHIVOS
+# 4. ZONA DE CARGA DE ARCHIVOS
 archivo_video = st.file_uploader("Arrastra tu archivo de video aquí (.mp4)", type=["mp4"])
 
 if archivo_video is not None:
-    st.success("Metraje recibido. Iniciando motor de visión computacional...")
+    st.success("Metraje recibido. Iniciando motor de visión computacional y cuadrícula analítica...")
     
-    col1, col2 = st.columns(2)
+    col1, col2 = st.columns([1.4, 1]) # La columna visual es ligeramente más ancha
     
     tfile = tempfile.NamedTemporaryFile(delete=False)
     tfile.write(archivo_video.read())
     
-    with st.spinner('Analizando trayectorias y procesando Gemelo Digital...'):
-        model = YOLO('yolov8n.pt')
+    with st.spinner('Procesando Gemelo Digital y extrayendo analítica espacial...'):
         cap = cv2.VideoCapture(tfile.name)
         
         width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        
+        # Extraer el primer frame para usarlo como base visual del local
+        ret, primer_frame = cap.read()
+        if ret:
+            primer_frame = cv2.cvtColor(primer_frame, cv2.COLOR_BGR2RGB)
+            
         mapa_calor = np.zeros((height, width), dtype=np.float32)
         
         barra_progreso = st.progress(0)
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        frame_count = 0
+        frame_count = 1
         
+        # --- CAPA DE INFERENCIA (YOLO) ---
         while cap.isOpened():
             ret, frame = cap.read()
             if not ret:
                 break
                 
-            results = model.track(frame, persist=True, classes=[0], verbose=False)
-            
-            if results[0].boxes.id is not None:
-                boxes = results[0].boxes.xyxy.cpu().numpy()
-                for box in boxes:
-                    x1, y1, x2, y2 = box
-                    cx, cy = int((x1 + x2) / 2), int(y2)
-                    if 0 <= cy < height and 0 <= cx < width:
-                        mapa_calor[cy-15:cy+15, cx-15:cx+15] += 1
+            if frame_count % salto_frames == 0:
+                results = model.track(frame, persist=True, classes=[0], verbose=False)
+                
+                if results[0].boxes.id is not None:
+                    boxes = results[0].boxes.xyxy.cpu().numpy()
+                    for box in boxes:
+                        x1, y1, x2, y2 = box
+                        cx, cy = int((x1 + x2) / 2), int(y2)
+                        if 0 <= cy < height and 0 <= cx < width:
+                            mapa_calor[cy-15:cy+15, cx-15:cx+15] += 1
             
             frame_count += 1
-            if total_frames > 0:
+            if total_frames > 0 and frame_count % 10 == 0:
                 barra_progreso.progress(min(frame_count / total_frames, 1.0))
                 
         cap.release()
         
-        # 4. RENDERIZADO DE RESULTADOS
+        # --- CAPA DE PROCESAMIENTO (Alpha Blending) ---
+        mapa_suavizado = cv2.GaussianBlur(mapa_calor, (0, 0), sigmaX=21, sigmaY=21)
+        mapa_norm = cv2.normalize(mapa_suavizado, None, 0, 255, cv2.NORM_MINMAX, dtype=cv2.CV_8U)
+        mapa_color = cv2.applyColorMap(mapa_norm, cv2.COLORMAP_JET)
+        mapa_color = cv2.cvtColor(mapa_color, cv2.COLOR_BGR2RGB)
+        
+        # Máscara: Solo aplicar color donde hay tráfico real
+        mascara = (mapa_norm > 5).astype(np.uint8)[:, :, np.newaxis]
+        frame_final = np.where(mascara, cv2.addWeighted(primer_frame, 1 - opacidad, mapa_color, opacidad, 0), primer_frame)
+
+        # --- MOTOR ANALÍTICO (Cuadrícula Espacial) ---
+        zonas_x, zonas_y = width // 3, height // 3
+        analisis_cuadricula = []
+        nombres_zonas = ["Noroeste", "Norte", "Noreste", "Oeste", "Centro", "Este", "Suroeste", "Sur", "Sureste"]
+        
+        idx = 0
+        for i in range(3):
+            for j in range(3):
+                y_inicio, y_fin = i * zonas_y, (i + 1) * zonas_y
+                x_inicio, x_fin = j * zonas_x, (j + 1) * zonas_x
+                intensidad = np.sum(mapa_calor[y_inicio:y_fin, x_inicio:x_fin])
+                analisis_cuadricula.append({'Sector': nombres_zonas[idx], 'Intensidad': intensidad})
+                idx += 1
+                
+        df_zonas = pd.DataFrame(analisis_cuadricula)
+        max_int = df_zonas['Intensidad'].max()
+        
+        def clasificar_zona(intensidad):
+            if max_int == 0 or intensidad == 0: return "Sin Datos"
+            ratio = intensidad / max_int
+            if ratio > 0.65: return "🔥 Caliente (Alta Permanencia)"
+            elif ratio > 0.25: return "🚶 Transición (Flujo Medio)"
+            else: return "🧊 Fría (Bajo Tráfico)"
+
+        def accion_estrategica(clasificacion):
+            if "Caliente" in clasificacion: return "⚠️ Ubicar productos de alto margen (Impulso)"
+            elif "Fría" in clasificacion: return "💡 Trasladar productos destino para forzar tráfico"
+            else: return "✅ Zona estable - Mantener layout actual"
+
+        df_zonas['Estado del Flujo'] = df_zonas['Intensidad'].apply(clasificar_zona)
+        df_zonas['Directriz de Layout (RA)'] = df_zonas['Estado del Flujo'].apply(accion_estrategica)
+        
+        # Limpiar y ordenar la tabla para el dashboard
+        df_final = df_zonas[df_zonas['Estado del Flujo'] != "Sin Datos"].sort_values(by='Intensidad', ascending=False).drop(columns=['Intensidad']).reset_index(drop=True)
+
+        # 5. RENDERIZADO DE LA INTERFAZ
         with col1:
-            st.markdown("#### 🔥 Mapeo Termográfico (Zonas Calientes)")
-            mapa_suavizado = cv2.GaussianBlur(mapa_calor, (61, 61), 0)
-            fig, ax = plt.subplots(figsize=(8, 5))
-            fig.patch.set_facecolor('#0e1117') # Fondo oscuro minimalista
-            ax.set_facecolor('#0e1117')
-            cax = ax.imshow(mapa_suavizado, cmap='inferno') # Color 'inferno' más profesional
-            ax.axis('off')
-            st.pyplot(fig)
+            st.markdown("#### 🔥 Simulación Híbrida: Termógrafo sobre Gemelo Digital")
+            st.image(frame_final, use_column_width=True, caption="El mapa de calor respeta la visibilidad del mobiliario real gracias al Alpha Blending.")
             
         with col2:
-            st.markdown("#### 📊 Gemelo Digital: Decisión Estratégica")
-            datos_tienda = {
-                'Zona': ['Entrada', 'Fondo', 'Centro'],
-                'Tráfico Real': ['Alto', 'Bajo', 'Medio'],
-                'Rotación Histórica': ['Bajo', 'Alto', 'Bajo'],
-            }
-            df = pd.DataFrame(datos_tienda)
-            
-            def generar_recomendacion(fila):
-                if fila['Tráfico Real'] == 'Alto' and fila['Rotación Histórica'] == 'Bajo':
-                    return "⚠️ Reemplazar por producto de impulso"
-                elif fila['Tráfico Real'] == 'Bajo' and fila['Rotación Histórica'] == 'Alto':
-                    return "✅ Mantener (Producto Imán)"
-                else:
-                    return "⚖️ Layout Óptimo"
-                    
-            df['Acción Sugerida (RA)'] = df.apply(generar_recomendacion, axis=1)
-            
-            st.dataframe(df, use_container_width=True)
-            st.caption("Nota: Las acciones marcadas con ⚠️ se proyectarán en los lentes de Realidad Aumentada del personal para su ejecución inmediata.")
+            st.markdown("#### 📊 Decisiones Automatizadas de Merchandising")
+            st.dataframe(df_final, use_container_width=True)
+            st.caption("Nota: Las directrices señaladas con ⚠️ y 💡 se proyectarán mediante Realidad Aumentada directamente en los estantes físicos del establecimiento.")

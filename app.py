@@ -53,11 +53,9 @@ with tab1:
 with tab2:
     url_video = st.text_input("Pega el enlace del video (Ej. YouTube):")
     if url_video:
-        with st.spinner("Descargando temporalmente el video para análisis seguro..."):
+        with st.spinner("Procesando enlace externo..."):
             try:
                 tfile_yt = tempfile.NamedTemporaryFile(delete=False, suffix='.mp4')
-                
-                # Configuración flexible optimizada para evitar errores de formato
                 ydl_opts = {
                     'format': 'best',
                     'outtmpl': tfile_yt.name,
@@ -66,10 +64,9 @@ with tab2:
                 }
                 with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                     ydl.download([url_video])
-                    
                 origen_video = tfile_yt.name
             except Exception as e:
-                st.error(f"Error técnico al extraer el video: {str(e)}")
+                st.warning("YouTube ha restringido el acceso automatizado desde servidores en la nube. Te recomendamos usar la pestaña 'Subir Archivo Local' con un video descargado previamente para tu presentación.")
 
 if origen_video is not None:
     st.success("Metraje recibido. Iniciando motor de visión computacional y cuadrícula analítica...")

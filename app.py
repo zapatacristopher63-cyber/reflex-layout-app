@@ -57,9 +57,9 @@ with tab2:
             try:
                 tfile_yt = tempfile.NamedTemporaryFile(delete=False, suffix='.mp4')
                 
-                # Configuramos yt-dlp para descargar el video directamente al archivo temporal
+                # Configuración flexible optimizada para evitar errores de formato
                 ydl_opts = {
-                    'format': 'best[ext=mp4][height<=720]/best', # Limitamos a 720p para mayor velocidad
+                    'format': 'best',
                     'outtmpl': tfile_yt.name,
                     'quiet': True,
                     'noplaylist': True
@@ -67,7 +67,7 @@ with tab2:
                 with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                     ydl.download([url_video])
                     
-                origen_video = tfile_yt.name # OpenCV ahora leerá un archivo local garantizado
+                origen_video = tfile_yt.name
             except Exception as e:
                 st.error(f"Error técnico al extraer el video: {str(e)}")
 
@@ -77,13 +77,11 @@ if origen_video is not None:
     col1, col2 = st.columns([1.4, 1])
     
     with st.spinner('Procesando Gemelo Digital y extrayendo analítica espacial...'):
-        # OpenCV ahora leerá indistintamente el archivo temporal o el link directo
         cap = cv2.VideoCapture(origen_video)
         
         width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         
-        # Extraer el primer frame para usarlo como base visual del local
         ret, primer_frame = cap.read()
         if ret:
             primer_frame = cv2.cvtColor(primer_frame, cv2.COLOR_BGR2RGB)
@@ -123,14 +121,9 @@ if origen_video is not None:
         mapa_color = cv2.applyColorMap(mapa_norm, cv2.COLORMAP_JET)
         mapa_color = cv2.cvtColor(mapa_color, cv2.COLOR_BGR2RGB)
         
-        # 1. Crear la mezcla translúcida completa
         mezcla = cv2.addWeighted(primer_frame, 1.0 - opacidad, mapa_color, opacidad, 0)
-        
-        # 2. Crear una máscara de 3 canales explícita (Evita el error de PyArrow/Streamlit)
         mascara_1d = mapa_norm > 5
         mascara_3d = np.repeat(mascara_1d[:, :, np.newaxis], 3, axis=2)
-        
-        # 3. Combinar y forzar el formato de memoria correcto (uint8)
         frame_final = np.where(mascara_3d, mezcla, primer_frame).astype(np.uint8)
 
         # --- MOTOR ANALÍTICO (Cuadrícula Espacial) ---
@@ -185,7 +178,6 @@ if origen_video is not None:
         col_qr, col_info = st.columns([1, 4])
         
         with col_qr:
-            # Simulamos la URL que aloja el entorno WebAR
             url_ar = "https://ejemplo-webar-layout.com/demo"
             qr = qrcode.QRCode(version=1, box_size=10, border=1)
             qr.add_data(url_ar)

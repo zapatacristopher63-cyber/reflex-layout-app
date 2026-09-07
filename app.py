@@ -58,7 +58,7 @@ with tab2:
                     info = ydl.extract_info(url_video, download=False)
                     origen_video = info['url'] # Obtenemos el link directo al stream
             except Exception as e:
-                st.error("No se pudo procesar el enlace. Asegúrate de que el video sea público.")
+                st.error(f"Error técnico al extraer el video: {str(e)}")
 
 if origen_video is not None:
     st.success("Metraje recibido. Iniciando motor de visión computacional y cuadrícula analítica...")

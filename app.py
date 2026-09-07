@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 import tempfile
 from ultralytics import YOLO
+import yt_dlp
 
 # 1. DISEÑO MINIMALISTA DE LA PÁGINA
 st.set_page_config(page_title="Reflex Layout 360", page_icon="⬛", layout="wide")
@@ -35,22 +36,47 @@ st.markdown("### Inteligencia Espacial y Gemelos Digitales para Retail")
 st.write("Sube el metraje de tus cámaras de seguridad. Nuestro motor de IA mapeará el flujo peatonal y generará decisiones estratégicas de layout al instante.")
 st.divider()
 
-# 4. ZONA DE CARGA DE ARCHIVOS
-archivo_video = st.file_uploader("Arrastra tu archivo de video aquí (.mp4)", type=["mp4"])
+# 4. ZONA DE ENTRADA DE VIDEO
+tab1, tab2 = st.tabs(["📁 Subir Archivo Local", "🔗 Pegar Enlace Público"])
 
-if archivo_video is not None:
+origen_video = None
+
+with tab1:
+    archivo_video = st.file_uploader("Arrastra tu archivo de video aquí (.mp4)", type=["mp4"])
+    if archivo_video is not None:
+        tfile = tempfile.NamedTemporaryFile(delete=False, suffix='.mp4')
+        tfile.write(archivo_video.read())
+        origen_video = tfile.name
+
+with tab2:
+    url_video = st.text_input("Pega el enlace del video (Ej. YouTube):")
+    if url_video:
+        with st.spinner("Extrayendo flujo de video del enlace..."):
+            try:
+                ydl_opts = {'format': 'best[ext=mp4]/best', 'quiet': True, 'noplaylist': True}
+                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                    info = ydl.extract_info(url_video, download=False)
+                    origen_video = info['url'] # Obtenemos el link directo al stream
+            except Exception as e:
+                st.error("No se pudo procesar el enlace. Asegúrate de que el video sea público.")
+
+if origen_video is not None:
     st.success("Metraje recibido. Iniciando motor de visión computacional y cuadrícula analítica...")
     
-    col1, col2 = st.columns([1.4, 1]) # La columna visual es ligeramente más ancha
-    
-    tfile = tempfile.NamedTemporaryFile(delete=False)
-    tfile.write(archivo_video.read())
+    col1, col2 = st.columns([1.4, 1])
     
     with st.spinner('Procesando Gemelo Digital y extrayendo analítica espacial...'):
-        cap = cv2.VideoCapture(tfile.name)
+        # OpenCV ahora leerá indistintamente el archivo temporal o el link directo
+        cap = cv2.VideoCapture(origen_video)
         
         width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        
+        ret, primer_frame = cap.read()
+        if ret:
+            primer_frame = cv2.cvtColor(primer_frame, cv2.COLOR_BGR2RGB)
+            
+        mapa_calor = np.zeros((height, width), dtype=np.float32)
         
         # Extraer el primer frame para usarlo como base visual del local
         ret, primer_frame = cap.read()

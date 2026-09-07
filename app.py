@@ -117,7 +117,7 @@ if origen_video is not None:
                 
         cap.release()
         
-      # --- CAPA DE PROCESAMIENTO (Alpha Blending) ---
+        # --- CAPA DE PROCESAMIENTO (Alpha Blending) ---
         mapa_suavizado = cv2.GaussianBlur(mapa_calor, (0, 0), sigmaX=21, sigmaY=21)
         mapa_norm = cv2.normalize(mapa_suavizado, None, 0, 255, cv2.NORM_MINMAX, dtype=cv2.CV_8U)
         mapa_color = cv2.applyColorMap(mapa_norm, cv2.COLORMAP_JET)
@@ -185,7 +185,7 @@ if origen_video is not None:
         col_qr, col_info = st.columns([1, 4])
         
         with col_qr:
-            # Simulamos la URL que aloja el entorno WebAR (ej. AR.js o modelo 3D)
+            # Simulamos la URL que aloja el entorno WebAR
             url_ar = "https://ejemplo-webar-layout.com/demo"
             qr = qrcode.QRCode(version=1, box_size=10, border=1)
             qr.add_data(url_ar)
@@ -196,7 +196,7 @@ if origen_video is not None:
             
         with col_info:
             st.success("**Protocolo de Ejecución en Piso:**\n"
-                    "1. Escanee el código desde su dispositivo móvil.\n"
-                    "2. Enfoque la cámara hacia los estantes de las *Zonas Calientes*.\n"
-                    "3. Siga la interfaz holográfica para reubicar los productos de alto margen.\n"
-                    "4. Valide la nueva distribución en el sistema.")
+                       "1. Escanee el código desde su dispositivo móvil.\n"
+                       "2. Enfoque la cámara hacia los estantes de las *Zonas Calientes*.\n"
+                       "3. Siga la interfaz holográfica para reubicar los productos de alto margen.\n"
+                       "4. Valide la nueva distribución en el sistema.")

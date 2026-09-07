@@ -14,7 +14,7 @@ import streamlit as st
 import yt_dlp
 from ultralytics import YOLO
 
-VIDEO_PRUEBA_URL = "https://drive.google.com/file/d/1qiK0plB-cUAJBcdLZd61bBHzvmySdlKK/view?usp=drivesdk"
+VIDEO_PRUEBA_URL = "https://drive.google.com/file/d/1NQUjiRgYCCktPAsAS7-HHlEbr5q0z46v/view?usp=drivesdk"
 
 # ──────────────────────────────────────────────────────────────────────────
 # CONFIGURACIÓN GENERAL Y BRANDING

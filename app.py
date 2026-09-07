@@ -1,13 +1,16 @@
 import os
 import base64
+import re
 import tempfile
 import textwrap
 from typing import Optional
+from urllib.parse import urlparse
 
 import cv2
 import numpy as np
 import pandas as pd
 import qrcode
+import requests
 import streamlit as st
 import yt_dlp
 from ultralytics import YOLO
@@ -156,18 +159,78 @@ opacidad = st.sidebar.slider("Opacidad del Termógrafo", 0.1, 1.0, 0.55)
 # ──────────────────────────────────────────────────────────────────────────
 # DESCARGA DE VIDEO DESDE ENLACE (YouTube y similares)
 # ──────────────────────────────────────────────────────────────────────────
-# YouTube bloquea de forma activa las IPs de datacenter (Streamlit Cloud
-# incluida) exigiendo verificación "no soy un robot". No existe una forma
-# 100% garantizada de evitarlo desde un servidor en la nube, pero estas
-# estrategias reducen mucho la probabilidad de bloqueo:
-#   1) Simular el cliente oficial de Android/iOS en vez del navegador web.
-#   2) Reintentar automáticamente con distintos "clientes".
-#   3) Permitir subir cookies.txt exportadas de una sesión real de YouTube
-#      (la solución más efectiva cuando el bloqueo persiste).
+# ──────────────────────────────────────────────────────────────────────────
+# DESCARGA DE VIDEO DESDE ENLACE
+# ──────────────────────────────────────────────────────────────────────────
+# YouTube (y otras plataformas de streaming) bloquean de forma activa las IPs
+# de datacenter exigiendo verificación "no soy un robot" — no hay forma 100%
+# garantizada de evitarlo desde un servidor en la nube.
+#
+# Google Drive, Dropbox y OneDrive son distintos: son solo almacenamiento de
+# archivos, NO hacen detección anti-bot, así que una descarga directa por
+# HTTP funciona de forma mucho más confiable. Por eso el flujo es:
+#   1) Si el enlace es de Drive/Dropbox/OneDrive -> descarga directa (requests)
+#   2) Si no, se asume plataforma de video -> yt-dlp (YouTube, Vimeo, etc.)
 CLIENTES_YT = ["android", "ios", "web"]
 
 
-def descargar_video(url: str, destino: str, cookies_path: Optional[str]) -> None:
+def _es_html(resp: requests.Response) -> bool:
+    """Detecta si la respuesta es una página de error/login en vez del archivo."""
+    return "text/html" in resp.headers.get("Content-Type", "")
+
+
+def _guardar_stream(resp: requests.Response, destino: str) -> None:
+    with open(destino, "wb") as f:
+        for chunk in resp.iter_content(chunk_size=1024 * 1024):
+            if chunk:
+                f.write(chunk)
+
+
+def descargar_google_drive(url: str, destino: str) -> None:
+    match = re.search(r"/d/([a-zA-Z0-9_-]+)|[?&]id=([a-zA-Z0-9_-]+)", url)
+    if not match:
+        raise ValueError("No se pudo extraer el ID del archivo de Google Drive.")
+    file_id = match.group(1) or match.group(2)
+
+    session = requests.Session()
+    base = "https://drive.google.com/uc?export=download"
+    resp = session.get(base, params={"id": file_id}, stream=True, timeout=30)
+
+    # Google Drive interpone una página de confirmación en archivos grandes.
+    token = next((v for k, v in resp.cookies.items() if k.startswith("download_warning")), None)
+    if token:
+        resp = session.get(base, params={"id": file_id, "confirm": token}, stream=True, timeout=30)
+
+    if _es_html(resp):
+        raise ValueError("El archivo de Drive no es público o no se pudo confirmar la descarga.")
+    _guardar_stream(resp, destino)
+
+
+def descargar_dropbox(url: str, destino: str) -> None:
+    url_directo = re.sub(r"([?&])dl=0", r"\1dl=1", url)
+    if "dl=1" not in url_directo:
+        url_directo += ("&" if "?" in url_directo else "?") + "dl=1"
+    resp = requests.get(url_directo, stream=True, timeout=30, allow_redirects=True)
+    if _es_html(resp):
+        raise ValueError("El enlace de Dropbox no permite descarga directa.")
+    _guardar_stream(resp, destino)
+
+
+def descargar_onedrive(url: str, destino: str) -> None:
+    url_directo = url
+    if "1drv.ms" in url:
+        # Los enlaces cortos redirigen a la URL real de onedrive.live.com
+        redir = requests.get(url, allow_redirects=True, timeout=30)
+        url_directo = redir.url
+    if "download=1" not in url_directo:
+        url_directo += ("&" if "?" in url_directo else "?") + "download=1"
+    resp = requests.get(url_directo, stream=True, timeout=30, allow_redirects=True)
+    if _es_html(resp):
+        raise ValueError("El enlace de OneDrive no permite descarga directa (revisa que sea público).")
+    _guardar_stream(resp, destino)
+
+
+def descargar_youtube(url: str, destino: str, cookies_path: Optional[str]) -> None:
     ultimo_error = None
     for cliente in CLIENTES_YT:
         ydl_opts = {
@@ -198,6 +261,24 @@ def descargar_video(url: str, destino: str, cookies_path: Optional[str]) -> None
     raise RuntimeError(str(ultimo_error))
 
 
+def descargar_medio(url: str, destino: str, cookies_path: Optional[str]) -> str:
+    """Detecta el proveedor y descarga el video. Devuelve el nombre del proveedor usado."""
+    dominio = urlparse(url).netloc.lower()
+
+    if "drive.google.com" in dominio:
+        descargar_google_drive(url, destino)
+        return "Google Drive"
+    if "dropbox.com" in dominio:
+        descargar_dropbox(url, destino)
+        return "Dropbox"
+    if "1drv.ms" in dominio or "onedrive.live.com" in dominio or "sharepoint.com" in dominio:
+        descargar_onedrive(url, destino)
+        return "OneDrive"
+
+    descargar_youtube(url, destino, cookies_path)
+    return "YouTube / otro"
+
+
 # ──────────────────────────────────────────────────────────────────────────
 # ZONA DE ENTRADA DE VIDEO
 # ──────────────────────────────────────────────────────────────────────────
@@ -215,13 +296,22 @@ with tab1:
         origen_video = tfile.name
 
 with tab2:
-    url_video = st.text_input("Pega el enlace del video (Ej. YouTube):")
+    st.caption(
+        "Compatibles: **Google Drive**, **Dropbox** y **OneDrive** (recomendado, "
+        "sin bloqueos) y YouTube / otras plataformas de video (con posibles "
+        "restricciones anti-bot). En Drive/Dropbox/OneDrive asegúrate de que "
+        "el enlace tenga permiso público o 'cualquiera con el enlace'."
+    )
+    url_video = st.text_input(
+        "Pega el enlace del video:",
+        placeholder="https://drive.google.com/file/d/... o https://www.dropbox.com/s/...",
+    )
 
-    with st.expander("🍪 Opcional: subir cookies.txt (recomendado si YouTube bloquea la descarga)"):
+    with st.expander("🍪 Opcional: subir cookies.txt (solo para YouTube, si bloquea la descarga)"):
         st.caption(
             "Exporta las cookies de una sesión activa de YouTube en tu navegador "
             "(extensión 'Get cookies.txt') y súbelas aquí. Esto suele resolver "
-            "el bloqueo de verificación anti-bot."
+            "el bloqueo de verificación anti-bot. No aplica a Drive/Dropbox/OneDrive."
         )
         archivo_cookies = st.file_uploader("cookies.txt", type=["txt"], key="cookies")
 
@@ -232,17 +322,20 @@ with tab2:
         cookies_path = tcookies.name
 
     if url_video:
-        with st.spinner("Procesando enlace externo..."):
-            tfile_yt = tempfile.NamedTemporaryFile(delete=False, suffix=".mp4")
+        with st.spinner("Descargando video desde el enlace..."):
+            tfile_ext = tempfile.NamedTemporaryFile(delete=False, suffix=".mp4")
             try:
-                descargar_video(url_video, tfile_yt.name, cookies_path)
-                origen_video = tfile_yt.name
+                proveedor = descargar_medio(url_video, tfile_ext.name, cookies_path)
+                origen_video = tfile_ext.name
+                st.toast(f"Descarga completada desde {proveedor} ✅")
             except Exception:
                 st.warning(
-                    "YouTube restringió esta descarga automatizada. "
-                    "Prueba subiendo un archivo cookies.txt (panel de arriba) "
-                    "o usa la pestaña 'Subir Archivo Local' con un video ya descargado."
+                    "No se pudo descargar el video de ese enlace. Verifica que "
+                    "el archivo/carpeta sea **público** ('cualquiera con el "
+                    "enlace puede ver'). Si es YouTube, prueba subiendo un "
+                    "cookies.txt (panel de arriba), o usa 'Subir Archivo Local'."
                 )
+
 
 # ──────────────────────────────────────────────────────────────────────────
 # PROCESAMIENTO PRINCIPAL

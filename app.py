@@ -736,7 +736,7 @@ FOOTER_HTML = textwrap.dedent(
     <div class="rl360-footer">
     {_logo_uni_tag}
     <div>
-    <div class="rl360-firma"Universidad Mayor, Real y Pontificia de San Francisco Xavier de Chuquisaca</div>
+    <div class="rl360-firma">Universidad Mayor, Real y Pontificia de San Francisco Xavier de Chuquisaca</div>
     <div class="rl360-firma-caption">Proyecto académico de Inteligencia Espacial · Reflex Layout 360</div>
     </div>
     </div>

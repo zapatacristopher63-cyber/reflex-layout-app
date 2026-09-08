@@ -635,7 +635,13 @@ if origen_video is not None:
                 y0, y1 = i * zonas_y, (i + 1) * zonas_y
                 x0, x1 = j * zonas_x, (j + 1) * zonas_x
                 intensidad = np.sum(mapa_calor[y0:y1, x0:x1])
-                analisis_cuadricula.append({"Sector": nombres_zonas[idx], "Intensidad": intensidad})
+                analisis_cuadricula.append(
+                    {
+                        "Zona": LETRAS_ZONA[idx],
+                        "Sector": nombres_zonas[idx],
+                        "Intensidad": intensidad,
+                    }
+                )
                 idx += 1
 
         df_zonas = pd.DataFrame(analisis_cuadricula)
@@ -660,13 +666,44 @@ if origen_video is not None:
 
         df_zonas["Estado del Flujo"] = df_zonas["Intensidad"].apply(clasificar_zona)
         df_zonas["Directriz de Layout (RA)"] = df_zonas["Estado del Flujo"].apply(accion_estrategica)
+        df_zonas["Zona"] = df_zonas["Zona"] + " · " + df_zonas["Sector"]
 
         df_final = (
             df_zonas[df_zonas["Estado del Flujo"] != "Sin Datos"]
             .sort_values(by="Intensidad", ascending=False)
-            .drop(columns=["Intensidad"])
+            .drop(columns=["Intensidad", "Sector"])
             .reset_index(drop=True)
         )
+
+        # --- ETIQUETAS DE ZONA SOBRE LA IMAGEN ---
+        # Se dibuja una cuadrícula tenue y la letra de cada zona (A-I) para
+        # que las recomendaciones de la tabla se ubiquen fácilmente sobre el
+        # mapa de calor.
+        frame_etiquetado = frame_final.copy()
+        for k in range(1, 3):
+            cv2.line(frame_etiquetado, (k * zonas_x, 0), (k * zonas_x, height), (255, 255, 255), 1, cv2.LINE_AA)
+            cv2.line(frame_etiquetado, (0, k * zonas_y), (width, k * zonas_y), (255, 255, 255), 1, cv2.LINE_AA)
+
+        idx = 0
+        for i in range(3):
+            for j in range(3):
+                letra = LETRAS_ZONA[idx]
+                cx = j * zonas_x + zonas_x // 2
+                cy = i * zonas_y + max(30, zonas_y // 8)
+                cv2.circle(frame_etiquetado, (cx, cy), 20, (15, 15, 15), -1, cv2.LINE_AA)
+                cv2.circle(frame_etiquetado, (cx, cy), 20, (255, 201, 60), 2, cv2.LINE_AA)
+                (tw, th), _ = cv2.getTextSize(letra, cv2.FONT_HERSHEY_DUPLEX, 0.85, 2)
+                cv2.putText(
+                    frame_etiquetado,
+                    letra,
+                    (cx - tw // 2, cy + th // 2),
+                    cv2.FONT_HERSHEY_DUPLEX,
+                    0.85,
+                    (255, 255, 255),
+                    2,
+                    cv2.LINE_AA,
+                )
+                idx += 1
 
     reproducir_sonido("exito")
 
@@ -676,9 +713,9 @@ if origen_video is not None:
     with col1:
         st.markdown("#### 🔥 Simulación Híbrida: Termógrafo sobre Gemelo Digital")
         st.image(
-            frame_final,
+            frame_etiquetado,
             use_container_width=True,
-            caption="El mapa de calor respeta la visibilidad del mobiliario real gracias al Alpha Blending.",
+            caption="Cada letra (A-I) ubica una zona de la cuadrícula analítica; coincide con la columna 'Zona' de la tabla de decisiones.",
         )
 
     with col2:
@@ -686,5 +723,23 @@ if origen_video is not None:
         st.dataframe(df_final, use_container_width=True, hide_index=True)
         st.caption(
             "Nota: Las directrices señaladas con ⚠️ y 💡 indican dónde reforzar o "
-            "reubicar productos según el flujo peatonal detectado."
+            "reubicar productos según el flujo peatonal detectado. Ubica la letra "
+            "de cada zona directamente sobre la imagen de la izquierda."
         )
+
+# ──────────────────────────────────────────────────────────────────────────
+# FIRMA INSTITUCIONAL
+# ──────────────────────────────────────────────────────────────────────────
+_logo_uni_tag = f'<img src="data:image/png;base64,{LOGO_UNI_B64}">' if LOGO_UNI_B64 else ""
+FOOTER_HTML = textwrap.dedent(
+    f"""\
+    <div class="rl360-footer">
+    {_logo_uni_tag}
+    <div>
+    <div class="rl360-firma">La Universidad Mayor, Real y Pontificia de San Francisco Xavier de Chuquisaca</div>
+    <div class="rl360-firma-caption">Proyecto académico de Inteligencia Espacial · Reflex Layout 360</div>
+    </div>
+    </div>
+    """
+)
+st.markdown(FOOTER_HTML, unsafe_allow_html=True)
